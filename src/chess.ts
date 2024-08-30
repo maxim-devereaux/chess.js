@@ -36,7 +36,7 @@ export const QUEEN = 'q'
 export const KING = 'k'
 
 export type Color = 'w' | 'b'
-export type PieceSymbol = 'p' | 'n' | 'b' | 'r' | 'q' | 'k'
+export type PieceSymbol = 'p' | 'n' | 'b' | 'r' | 'q' | 'k' | 'z'
 
 // prettier-ignore
 export type Square =
@@ -188,6 +188,7 @@ const PIECE_OFFSETS = {
   r: [-16, 1, 16, -1],
   q: [-17, -16, -15, 1, 17, 16, 15, -1],
   k: [-17, -16, -15, 1, 17, 16, 15, -1],
+  z: [],
 }
 
 // prettier-ignore
@@ -228,7 +229,15 @@ const RAYS = [
   -15,  0,  0,  0,  0,  0,  0,-16,  0,  0,  0,  0,  0,  0,-17
 ];
 
-const PIECE_MASKS = { p: 0x1, n: 0x2, b: 0x4, r: 0x8, q: 0x10, k: 0x20 }
+const PIECE_MASKS = {
+  p: 0x1,
+  n: 0x2,
+  b: 0x4,
+  r: 0x8,
+  q: 0x10,
+  k: 0x20,
+  z: 0x40,
+}
 
 const SYMBOLS = 'pnbrqkPNBRQK'
 
@@ -1036,6 +1045,7 @@ export class Chess {
       q: 0,
       k: 0,
       p: 0,
+      z: 0,
     }
     const bishops = []
     let numPieces = 0
@@ -1440,88 +1450,94 @@ export class Chess {
     const them = swapColor(us)
     this._push(move)
 
-    this._board[move.to] = this._board[move.from]
-    delete this._board[move.from]
-
-    // if ep capture, remove the captured pawn
-    if (move.flags & BITS.EP_CAPTURE) {
-      if (this._turn === BLACK) {
-        delete this._board[move.to - 16]
-      } else {
-        delete this._board[move.to + 16]
-      }
-    }
-
-    // if pawn promotion, replace with new piece
-    if (move.promotion) {
-      this._board[move.to] = { type: move.promotion, color: us }
-    }
-
-    // if we moved the king
-    if (this._board[move.to].type === KING) {
-      this._kings[us] = move.to
-
-      // if we castled, move the rook next to the king
-      if (move.flags & BITS.KSIDE_CASTLE) {
-        const castlingTo = move.to - 1
-        const castlingFrom = move.to + 1
-        this._board[castlingTo] = this._board[castlingFrom]
-        delete this._board[castlingFrom]
-      } else if (move.flags & BITS.QSIDE_CASTLE) {
-        const castlingTo = move.to + 1
-        const castlingFrom = move.to - 2
-        this._board[castlingTo] = this._board[castlingFrom]
-        delete this._board[castlingFrom]
-      }
-
-      // turn off castling
-      this._castling[us] = 0
-    }
-
-    // turn off castling if we move a rook
-    if (this._castling[us]) {
-      for (let i = 0, len = ROOKS[us].length; i < len; i++) {
-        if (
-          move.from === ROOKS[us][i].square &&
-          this._castling[us] & ROOKS[us][i].flag
-        ) {
-          this._castling[us] ^= ROOKS[us][i].flag
-          break
-        }
-      }
-    }
-
-    // turn off castling if we capture a rook
-    if (this._castling[them]) {
-      for (let i = 0, len = ROOKS[them].length; i < len; i++) {
-        if (
-          move.to === ROOKS[them][i].square &&
-          this._castling[them] & ROOKS[them][i].flag
-        ) {
-          this._castling[them] ^= ROOKS[them][i].flag
-          break
-        }
-      }
-    }
-
-    // if big pawn move, update the en passant square
-    if (move.flags & BITS.BIG_PAWN) {
-      if (us === BLACK) {
-        this._epSquare = move.to - 16
-      } else {
-        this._epSquare = move.to + 16
-      }
-    } else {
+    // Make null move
+    if (move.piece === 'z') {
       this._epSquare = EMPTY
-    }
-
-    // reset the 50 move counter if a pawn is moved or a piece is captured
-    if (move.piece === PAWN) {
-      this._halfMoves = 0
-    } else if (move.flags & (BITS.CAPTURE | BITS.EP_CAPTURE)) {
-      this._halfMoves = 0
-    } else {
       this._halfMoves++
+    } else {
+      this._board[move.to] = this._board[move.from]
+      delete this._board[move.from]
+
+      // if ep capture, remove the captured pawn
+      if (move.flags & BITS.EP_CAPTURE) {
+        if (this._turn === BLACK) {
+          delete this._board[move.to - 16]
+        } else {
+          delete this._board[move.to + 16]
+        }
+      }
+
+      // if pawn promotion, replace with new piece
+      if (move.promotion) {
+        this._board[move.to] = { type: move.promotion, color: us }
+      }
+
+      // if we moved the king
+      if (this._board[move.to].type === KING) {
+        this._kings[us] = move.to
+
+        // if we castled, move the rook next to the king
+        if (move.flags & BITS.KSIDE_CASTLE) {
+          const castlingTo = move.to - 1
+          const castlingFrom = move.to + 1
+          this._board[castlingTo] = this._board[castlingFrom]
+          delete this._board[castlingFrom]
+        } else if (move.flags & BITS.QSIDE_CASTLE) {
+          const castlingTo = move.to + 1
+          const castlingFrom = move.to - 2
+          this._board[castlingTo] = this._board[castlingFrom]
+          delete this._board[castlingFrom]
+        }
+
+        // turn off castling
+        this._castling[us] = 0
+      }
+
+      // turn off castling if we move a rook
+      if (this._castling[us]) {
+        for (let i = 0, len = ROOKS[us].length; i < len; i++) {
+          if (
+            move.from === ROOKS[us][i].square &&
+            this._castling[us] & ROOKS[us][i].flag
+          ) {
+            this._castling[us] ^= ROOKS[us][i].flag
+            break
+          }
+        }
+      }
+
+      // turn off castling if we capture a rook
+      if (this._castling[them]) {
+        for (let i = 0, len = ROOKS[them].length; i < len; i++) {
+          if (
+            move.to === ROOKS[them][i].square &&
+            this._castling[them] & ROOKS[them][i].flag
+          ) {
+            this._castling[them] ^= ROOKS[them][i].flag
+            break
+          }
+        }
+      }
+
+      // if big pawn move, update the en passant square
+      if (move.flags & BITS.BIG_PAWN) {
+        if (us === BLACK) {
+          this._epSquare = move.to - 16
+        } else {
+          this._epSquare = move.to + 16
+        }
+      } else {
+        this._epSquare = EMPTY
+      }
+
+      // reset the 50 move counter if a pawn is moved or a piece is captured
+      if (move.piece === PAWN) {
+        this._halfMoves = 0
+      } else if (move.flags & (BITS.CAPTURE | BITS.EP_CAPTURE)) {
+        this._halfMoves = 0
+      } else {
+        this._halfMoves++
+      }
     }
 
     if (us === BLACK) {
@@ -1556,41 +1572,44 @@ export class Chess {
     this._halfMoves = old.halfMoves
     this._moveNumber = old.moveNumber
 
-    const us = this._turn
-    const them = swapColor(us)
+    // No actions for retract null move
+    if (move.piece !== 'z') {
+      const us = this._turn
+      const them = swapColor(us)
 
-    this._board[move.from] = this._board[move.to]
-    this._board[move.from].type = move.piece // to undo any promotions
-    delete this._board[move.to]
+      this._board[move.from] = this._board[move.to]
+      this._board[move.from].type = move.piece // to undo any promotions
+      delete this._board[move.to]
 
-    if (move.captured) {
-      if (move.flags & BITS.EP_CAPTURE) {
-        // en passant capture
-        let index: number
-        if (us === BLACK) {
-          index = move.to - 16
+      if (move.captured) {
+        if (move.flags & BITS.EP_CAPTURE) {
+          // en passant capture
+          let index: number
+          if (us === BLACK) {
+            index = move.to - 16
+          } else {
+            index = move.to + 16
+          }
+          this._board[index] = { type: PAWN, color: them }
         } else {
-          index = move.to + 16
+          // regular capture
+          this._board[move.to] = { type: move.captured, color: them }
         }
-        this._board[index] = { type: PAWN, color: them }
-      } else {
-        // regular capture
-        this._board[move.to] = { type: move.captured, color: them }
-      }
-    }
-
-    if (move.flags & (BITS.KSIDE_CASTLE | BITS.QSIDE_CASTLE)) {
-      let castlingTo: number, castlingFrom: number
-      if (move.flags & BITS.KSIDE_CASTLE) {
-        castlingTo = move.to + 1
-        castlingFrom = move.to - 1
-      } else {
-        castlingTo = move.to - 2
-        castlingFrom = move.to + 1
       }
 
-      this._board[castlingTo] = this._board[castlingFrom]
-      delete this._board[castlingFrom]
+      if (move.flags & (BITS.KSIDE_CASTLE | BITS.QSIDE_CASTLE)) {
+        let castlingTo: number, castlingFrom: number
+        if (move.flags & BITS.KSIDE_CASTLE) {
+          castlingTo = move.to + 1
+          castlingFrom = move.to - 1
+        } else {
+          castlingTo = move.to - 2
+          castlingFrom = move.to + 1
+        }
+
+        this._board[castlingTo] = this._board[castlingFrom]
+        delete this._board[castlingFrom]
+      }
     }
 
     return move
@@ -1967,7 +1986,7 @@ export class Chess {
     }
 
     /*
-     * Per section 8.2.6 of the PGN spec, the Result tag pair must match match
+     * Per section 8.2.6 of the PGN spec, the Result tag pair must match
      * the termination marker. Only do this when headers are present, but the
      * result tag is missing
      */
@@ -1991,11 +2010,12 @@ export class Chess {
 
   private _moveToSan(move: InternalMove, moves: InternalMove[]) {
     let output = ''
-
     if (move.flags & BITS.KSIDE_CASTLE) {
       output = 'O-O'
     } else if (move.flags & BITS.QSIDE_CASTLE) {
       output = 'O-O-O'
+    } else if (move.piece === 'z') {
+      output = 'Z0'
     } else {
       if (move.piece !== PAWN) {
         const disambiguator = getDisambiguator(move, moves)
@@ -2029,10 +2049,26 @@ export class Chess {
     return output
   }
 
+  private _nullMove(): InternalMove {
+    return {
+      color: this._turn,
+      from: Ox88.a1,
+      to: Ox88.h8,
+      piece: 'z',
+      captured: undefined,
+      promotion: undefined,
+      flags: 0,
+    }
+  }
+
   // convert a move from Standard Algebraic Notation (SAN) to 0x88 coordinates
   private _moveFromSan(move: string, strict = false): InternalMove | null {
     // strip off any move decorations: e.g Nf3+?! becomes Nf3
     const cleanMove = strippedSan(move)
+
+    if (cleanMove === 'Z0') {
+      return this._nullMove()
+    }
 
     let pieceType = inferPieceType(cleanMove)
     let moves = this._moves({ legal: true, piece: pieceType })
@@ -2231,7 +2267,7 @@ export class Chess {
       to: toAlgebraic,
       san: this._moveToSan(uglyMove, this._moves({ legal: true })),
       flags: prettyFlags,
-      lan: fromAlgebraic + toAlgebraic,
+      lan: uglyMove.piece === 'z' ? 'Z0' : fromAlgebraic + toAlgebraic,
       before: this.fen(),
       after: '',
     }
